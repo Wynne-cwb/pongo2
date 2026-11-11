@@ -156,3 +156,13 @@ func TestMeterSeesAFunctionAssignedThroughWithAsNotADirectCall(t *testing.T) {
 		t.Fatalf("calls %v", meter.calls)
 	}
 }
+
+func TestMeterRefusesACallOfAValueBeforeResolvingIt(t *testing.T) {
+	for _, tpl := range []string{`{{ data.items.append(1) }}`, `{% with f=data.name %}{{ f(1) }}{% endwith %}`} {
+		meter := &recordingMeter{refuse: func(_ string, topLevel bool) bool { return !topLevel }}
+		_, err := execMetered(t, tpl, pongo2.Context{"data": map[string]any{"items": []any{1}, "name": "x"}}, meter)
+		if err == nil || !strings.Contains(err.Error(), errStop.Error()) {
+			t.Fatalf("%s: want the meter's refusal, got %v", tpl, err)
+		}
+	}
+}

@@ -244,9 +244,6 @@ func (vr *variableResolver) String() string {
 func (vr *variableResolver) resolve(ctx *ExecutionContext) (*Value, error) {
 	var current reflect.Value
 	var isSafe bool
-	// fromPublic is whether the first part was found in the public context
-	// rather than in a name a tag assigned (Meter.CheckCall).
-	fromPublic := false
 
 	// we are resolving an in-template array definition
 	if len(vr.parts) > 0 && vr.parts[0].typ == varTypeArray {
@@ -272,6 +269,21 @@ func (vr *variableResolver) resolve(ctx *ExecutionContext) (*Value, error) {
 	}
 
 	for idx, part := range vr.parts {
+		if ctx.Meter != nil && part.isFunctionCall {
+			// A call is checked before its name is resolved: only a name of
+			// the public context called directly is a top-level call; a
+			// method or field of a value, or a name a tag assigned, is not,
+			// whatever it resolves to.
+			topLevel := false
+			if idx == 0 {
+				_, inPrivate := ctx.Private[part.s]
+				topLevel = !inPrivate
+			}
+			if err := ctx.Meter.CheckCall(part.s, topLevel); err != nil {
+				return nil, err
+			}
+		}
+
 		if idx == 0 {
 			// We're looking up the first part of the variable.
 			// First we're having a look in our private
@@ -280,7 +292,6 @@ func (vr *variableResolver) resolve(ctx *ExecutionContext) (*Value, error) {
 			if !inPrivate {
 				// Nothing found? Then have a final lookup in the public context
 				val = ctx.Public[vr.parts[0].s]
-				fromPublic = true
 			}
 			current = reflect.ValueOf(val) // Get the initial value
 		} else {
@@ -381,14 +392,6 @@ func (vr *variableResolver) resolve(ctx *ExecutionContext) (*Value, error) {
 			}
 		}
 
-		if ctx.Meter != nil && part.isFunctionCall && !current.IsValid() {
-			// A call of a name that resolves to nothing: the meter decides
-			// whether calling an unknown name is an error.
-			if err := ctx.Meter.CheckCall(part.s, idx == 0 && fromPublic); err != nil {
-				return nil, err
-			}
-		}
-
 		if !current.IsValid() {
 			// Value is not valid (anymore)
 			return AsValue(nil), nil
@@ -415,10 +418,10 @@ func (vr *variableResolver) resolve(ctx *ExecutionContext) (*Value, error) {
 				return nil, fmt.Errorf("'%s' is not a function (it is %s)", vr.String(), current.Kind().String())
 			}
 
-			if ctx.Meter != nil {
+			if ctx.Meter != nil && !part.isFunctionCall {
 				// A function referenced without parentheses (pongo2 calls it
 				// all the same, e.g. {% with f=fn %}) is not a direct call.
-				if err := ctx.Meter.CheckCall(part.s, idx == 0 && fromPublic && part.isFunctionCall); err != nil {
+				if err := ctx.Meter.CheckCall(part.s, false); err != nil {
 					return nil, err
 				}
 			}
