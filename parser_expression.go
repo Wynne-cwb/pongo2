@@ -267,6 +267,9 @@ func (expr *simpleExpression) Evaluate(ctx *ExecutionContext) (*Value, *Error) {
 		case "+":
 			if result.IsString() || t2.IsString() {
 				// Result will be a string
+				if err := ctx.chargeValue(len(result.String())+len(t2.String()), expr.opToken); err != nil {
+					return nil, err
+				}
 				return AsValue(result.String() + t2.String()), nil
 			}
 			if result.IsFloat() || t2.IsFloat() {

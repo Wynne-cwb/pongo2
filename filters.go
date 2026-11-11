@@ -91,11 +91,48 @@ func (fc *filterCall) Execute(v *Value, ctx *ExecutionContext) (*Value, *Error) 
 		param = AsValue(nil)
 	}
 
+	charged := false
+	if ctx.Meter != nil {
+		if size, ok := estimateFilterResult(fc.name, v, param); ok {
+			if err := ctx.chargeValue(size, fc.token); err != nil {
+				return nil, err
+			}
+			charged = true
+		}
+	}
+
 	filteredValue, err := fc.filterFunc(v, param)
 	if err != nil {
 		return nil, err.updateFromTokenIfNeeded(ctx.template, fc.token)
 	}
+	if ctx.Meter != nil && !charged {
+		if err := ctx.chargeValue(EstimateSize(filteredValue), fc.token); err != nil {
+			return nil, err
+		}
+	}
 	return filteredValue, nil
+}
+
+// estimateFilterResult is the size of the value a filter is about to build,
+// for the filters whose result size follows from their input and parameter
+// and can exceed both: charged before the filter runs, so the value is never
+// built past the meter.
+func estimateFilterResult(name string, in, param *Value) (int, bool) {
+	switch name {
+	case "center", "ljust", "rjust":
+		width := param.Integer()
+		if length := len(in.String()); width < length {
+			width = length
+		}
+		return width, true
+	case "add":
+		if in.IsString() || param.IsString() {
+			return len(in.String()) + len(param.String()), true
+		}
+		return 0, false
+	default:
+		return 0, false
+	}
 }
 
 // Filter = IDENT | IDENT ":" FilterArg | IDENT "|" Filter

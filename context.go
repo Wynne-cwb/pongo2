@@ -78,6 +78,10 @@ type ExecutionContext struct {
 	Public        Context
 	Private       Context
 	Shared        Context
+
+	// Meter, when set, bounds this execution (see Meter). Child contexts
+	// share it.
+	Meter Meter
 }
 
 var pongo2MetaContext = Context{
@@ -108,6 +112,7 @@ func NewChildExecutionContext(parent *ExecutionContext) *ExecutionContext {
 		Private:       make(Context),
 		Autoescape:    parent.Autoescape,
 		FieldAliasTag: parent.FieldAliasTag,
+		Meter:         parent.Meter,
 	}
 	newctx.Shared = parent.Shared
 

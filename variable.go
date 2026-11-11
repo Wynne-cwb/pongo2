@@ -244,6 +244,9 @@ func (vr *variableResolver) String() string {
 func (vr *variableResolver) resolve(ctx *ExecutionContext) (*Value, error) {
 	var current reflect.Value
 	var isSafe bool
+	// fromPublic is whether the first part was found in the public context
+	// rather than in a name a tag assigned (Meter.CheckCall).
+	fromPublic := false
 
 	// we are resolving an in-template array definition
 	if len(vr.parts) > 0 && vr.parts[0].typ == varTypeArray {
@@ -277,6 +280,7 @@ func (vr *variableResolver) resolve(ctx *ExecutionContext) (*Value, error) {
 			if !inPrivate {
 				// Nothing found? Then have a final lookup in the public context
 				val = ctx.Public[vr.parts[0].s]
+				fromPublic = true
 			}
 			current = reflect.ValueOf(val) // Get the initial value
 		} else {
@@ -377,6 +381,14 @@ func (vr *variableResolver) resolve(ctx *ExecutionContext) (*Value, error) {
 			}
 		}
 
+		if ctx.Meter != nil && part.isFunctionCall && !current.IsValid() {
+			// A call of a name that resolves to nothing: the meter decides
+			// whether calling an unknown name is an error.
+			if err := ctx.Meter.CheckCall(part.s, idx == 0 && fromPublic); err != nil {
+				return nil, err
+			}
+		}
+
 		if !current.IsValid() {
 			// Value is not valid (anymore)
 			return AsValue(nil), nil
@@ -401,6 +413,14 @@ func (vr *variableResolver) resolve(ctx *ExecutionContext) (*Value, error) {
 			// Check for callable
 			if current.Kind() != reflect.Func {
 				return nil, fmt.Errorf("'%s' is not a function (it is %s)", vr.String(), current.Kind().String())
+			}
+
+			if ctx.Meter != nil {
+				// A function referenced without parentheses (pongo2 calls it
+				// all the same, e.g. {% with f=fn %}) is not a direct call.
+				if err := ctx.Meter.CheckCall(part.s, idx == 0 && fromPublic && part.isFunctionCall); err != nil {
+					return nil, err
+				}
 			}
 
 			// Check for correct function syntax and types
@@ -504,6 +524,12 @@ func (vr *variableResolver) resolve(ctx *ExecutionContext) (*Value, error) {
 				// Return the function call value
 				current = rv.Interface().(*Value).val
 				isSafe = rv.Interface().(*Value).safe
+			}
+
+			if ctx.Meter != nil {
+				if err := ctx.Meter.ChargeValue(estimateReflectSize(current, valueSizeDepth)); err != nil {
+					return nil, err
+				}
 			}
 		}
 
