@@ -166,3 +166,26 @@ func TestMeterRefusesACallOfAValueBeforeResolvingIt(t *testing.T) {
 		}
 	}
 }
+
+// A block that renders its body into its own buffer (spaceless, filter,
+// ifchanged) is metered as it renders: the loop inside stops at the output
+// limit instead of filling the buffer until the block ends.
+func TestMeterStopsOutputInsideABufferingBlock(t *testing.T) {
+	for name, tpl := range map[string]string{
+		"spaceless": `{% spaceless %}{% for i in items %}0123456789{% endfor %}{% endspaceless %}`,
+		"filter":    `{% filter lower %}{% for i in items %}0123456789{% endfor %}{% endfilter %}`,
+		"ifchanged": `{% for j in once %}{% ifchanged %}{% for i in items %}0123456789{% endfor %}{% endifchanged %}{% endfor %}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			meter := &recordingMeter{maxOutputBytes: 100}
+			items := make([]int, 10000)
+			_, err := execMetered(t, tpl, pongo2.Context{"items": items, "once": []int{1}}, meter)
+			if err == nil {
+				t.Fatal("want the meter's stop")
+			}
+			if meter.iterations > 20 {
+				t.Fatalf("the loop ran %d iterations past a 100-byte output limit; it must stop as it crosses it", meter.iterations)
+			}
+		})
+	}
+}

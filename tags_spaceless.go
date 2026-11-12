@@ -1,9 +1,6 @@
 package pongo2
 
-import (
-	"bytes"
-	"regexp"
-)
+import "regexp"
 
 type tagSpacelessNode struct {
 	wrapper *NodeWrapper
@@ -12,10 +9,13 @@ type tagSpacelessNode struct {
 var tagSpacelessRegexp = regexp.MustCompile(`(?U:(<.*>))([\t\n\v\f\r ]+)(?U:(<.*>))`)
 
 func (node *tagSpacelessNode) Execute(ctx *ExecutionContext, writer TemplateWriter) *Error {
-	b := bytes.NewBuffer(make([]byte, 0, 1024)) // 1 KiB
+	b, body := ctx.blockBuffer()
 
-	err := node.wrapper.Execute(ctx, b)
+	err := node.wrapper.Execute(ctx, body)
 	if err != nil {
+		return err
+	}
+	if err := ctx.blockRefused(body); err != nil {
 		return err
 	}
 

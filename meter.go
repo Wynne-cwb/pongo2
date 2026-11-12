@@ -1,6 +1,7 @@
 package pongo2
 
 import (
+	"bytes"
 	"io"
 	"reflect"
 )
@@ -81,6 +82,28 @@ func (m *meteredWriter) WriteString(s string) (int, error) {
 		return 0, err
 	}
 	return io.WriteString(m.w, s)
+}
+
+// blockBuffer is the buffer a block tag (spaceless, filter, ifchanged) renders
+// its body into before writing the result. Under a meter the body's writes are
+// charged as output as they happen, so a body cannot grow past the limit
+// before the block ends; the block's own write to the outer writer is charged
+// again, which only tightens the limit. Without a meter it is a plain buffer.
+func (ctx *ExecutionContext) blockBuffer() (*bytes.Buffer, TemplateWriter) {
+	buf := bytes.NewBuffer(make([]byte, 0, 1024)) // 1 KiB
+	if ctx.Meter == nil {
+		return buf, buf
+	}
+	return buf, &meteredWriter{w: buf, meter: ctx.Meter}
+}
+
+// blockRefused is the execution error of a block whose metered body was
+// refused, or nil.
+func (ctx *ExecutionContext) blockRefused(body TemplateWriter) *Error {
+	if err := writeRefused(body); err != nil {
+		return ctx.OrigError(err, nil)
+	}
+	return nil
 }
 
 // writeRefused is the refusal a metered writer kept, if writer is one.

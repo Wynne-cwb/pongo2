@@ -16,9 +16,12 @@ func (node *tagIfchangedNode) Execute(ctx *ExecutionContext, writer TemplateWrit
 	if len(node.watchedExpr) == 0 {
 		// Check against own rendered body
 
-		buf := bytes.NewBuffer(make([]byte, 0, 1024)) // 1 KiB
-		err := node.thenWrapper.Execute(ctx, buf)
+		buf, body := ctx.blockBuffer()
+		err := node.thenWrapper.Execute(ctx, body)
 		if err != nil {
+			return err
+		}
+		if err := ctx.blockRefused(body); err != nil {
 			return err
 		}
 

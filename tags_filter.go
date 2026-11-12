@@ -1,9 +1,5 @@
 package pongo2
 
-import (
-	"bytes"
-)
-
 type nodeFilterCall struct {
 	name      string
 	paramExpr IEvaluator
@@ -16,10 +12,13 @@ type tagFilterNode struct {
 }
 
 func (node *tagFilterNode) Execute(ctx *ExecutionContext, writer TemplateWriter) *Error {
-	temp := bytes.NewBuffer(make([]byte, 0, 1024)) // 1 KiB size
+	temp, body := ctx.blockBuffer()
 
-	err := node.bodyWrapper.Execute(ctx, temp)
+	err := node.bodyWrapper.Execute(ctx, body)
 	if err != nil {
+		return err
+	}
+	if err := ctx.blockRefused(body); err != nil {
 		return err
 	}
 
