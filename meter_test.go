@@ -189,3 +189,19 @@ func TestMeterStopsOutputInsideABufferingBlock(t *testing.T) {
 		})
 	}
 }
+
+func TestMeterIterationRefusalIsReportedAtTheLoopsLine(t *testing.T) {
+	meter := &recordingMeter{maxIterations: 3}
+	_, err := execMetered(t, "<p>a</p>\n<p>b</p>\n{% for i in items %}{% for j in items %}.{% endfor %}{% endfor %}",
+		pongo2.Context{"items": []int{1, 2, 3}}, meter)
+	var perr *pongo2.Error
+	if !errors.As(err, &perr) {
+		t.Fatalf("want a pongo2 error, got %v", err)
+	}
+	if perr.Line != 3 {
+		t.Fatalf("line: want 3, got %d", perr.Line)
+	}
+	if !errors.Is(perr.OrigError, errStop) {
+		t.Fatalf("want the meter's stop as the cause, got %v", perr.OrigError)
+	}
+}

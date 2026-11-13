@@ -9,6 +9,10 @@ type tagForNode struct {
 
 	bodyWrapper  *NodeWrapper
 	emptyWrapper *NodeWrapper
+
+	// position is the tag's start, where a meter's refusal of an iteration
+	// is reported.
+	position *Token
 }
 
 type tagForLoopInformation struct {
@@ -48,11 +52,11 @@ func (node *tagForNode) Execute(ctx *ExecutionContext, writer TemplateWriter) (f
 		// There's something to iterate over (correct type and at least 1 item)
 		if forCtx.Meter != nil {
 			if err := writeRefused(writer); err != nil {
-				forError = forCtx.OrigError(err, nil)
+				forError = forCtx.OrigError(err, node.position)
 				return false
 			}
 			if err := forCtx.Meter.ChargeIteration(); err != nil {
-				forError = forCtx.OrigError(err, nil)
+				forError = forCtx.OrigError(err, node.position)
 				return false
 			}
 		}
@@ -94,7 +98,7 @@ func (node *tagForNode) Execute(ctx *ExecutionContext, writer TemplateWriter) (f
 }
 
 func tagForParser(doc *Parser, start *Token, arguments *Parser) (INodeTag, *Error) {
-	forNode := &tagForNode{}
+	forNode := &tagForNode{position: start}
 
 	// Arguments parsing
 	var valueToken *Token
