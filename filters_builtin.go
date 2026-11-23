@@ -680,7 +680,7 @@ func filterLjust(in *Value, param *Value) (*Value, *Error) {
 	if times > maxCharPadding {
 		return nil, &Error{
 			Sender:    "filter:ljust",
-			OrigError: fmt.Errorf("ljust doesn't support more padding than %c chars", maxCharPadding),
+			OrigError: fmt.Errorf("ljust doesn't support more padding than %d chars", maxCharPadding),
 		}
 	}
 	return AsValue(fmt.Sprintf("%s%s", in.String(), strings.Repeat(" ", times))), nil
@@ -893,7 +893,7 @@ func filterRjust(in *Value, param *Value) (*Value, *Error) {
 	if padding > maxCharPadding {
 		return nil, &Error{
 			Sender:    "filter:rjust",
-			OrigError: fmt.Errorf("rjust doesn't support more padding than %c chars", maxCharPadding),
+			OrigError: fmt.Errorf("rjust doesn't support more padding than %d chars", maxCharPadding),
 		}
 	}
 	return AsValue(fmt.Sprintf(fmt.Sprintf("%%%ds", padding), in.String())), nil

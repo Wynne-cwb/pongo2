@@ -40,3 +40,23 @@ func FuzzBuiltinFilters(f *testing.F) {
 		}
 	})
 }
+
+// The padding limit is stated as a number: formatted with %c it printed the
+// rune at that code point (U+2710, "✐") instead of 10000.
+func TestFilterPaddingLimitErrorNamesTheLimit(t *testing.T) {
+	for _, filter := range []string{"ljust", "rjust"} {
+		tpl, err := FromString(fmt.Sprintf("{{ \"x\"|%s:%d }}", filter, maxCharPadding+2))
+		if err != nil {
+			t.Fatalf("%s: parse: %v", filter, err)
+		}
+		_, err = tpl.Execute(nil)
+		if err == nil {
+			t.Fatalf("%s: expected the padding limit error", filter)
+		}
+		want := fmt.Sprintf("%s doesn't support more padding than %d chars", filter, maxCharPadding)
+		var perr *Error
+		if !errors.As(err, &perr) || perr.OrigError == nil || perr.OrigError.Error() != want {
+			t.Errorf("%s: error = %v, want %q", filter, err, want)
+		}
+	}
+}
